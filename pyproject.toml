@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fast-p"
+version = "0.1.0"
+description = "基于 fast-cli 的电子元器件比价截图桌面工具"
+requires-python = ">=3.10"
+dependencies = [
+  "openpyxl>=3.1",
+  "pillow>=10",
+  "playwright>=1.40",
+  "psutil>=5.9",
+]
+
+[project.scripts]
+fast-p = "fast_p.app:main"
+
+[tool.setuptools.packages.find]
+include = ["fast_p*"]
+
