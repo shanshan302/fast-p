@@ -71,6 +71,7 @@ class WorkflowModesTest(unittest.TestCase):
         sheet.append(["敦煌SKU", "型号", "标准厂牌", "供货价", "最小起订量"])
         sheet.append(["SKU-1", "ABC123", "ACME", 1.0, 100])
         workbook.save(path)
+        workbook.close()
 
     @staticmethod
     def capture_excel(path):
@@ -79,6 +80,7 @@ class WorkflowModesTest(unittest.TestCase):
         sheet.append(["敦煌SKU", "型号", "商品链接", "截图文件名"])
         sheet.append(["SKU-1", "ABC123", "https://example.test/ABC123", ""])
         workbook.save(path)
+        workbook.close()
 
     def runner(self):
         return JobRunner(self.settings, lambda event: None, threading.Event())
@@ -92,8 +94,13 @@ class WorkflowModesTest(unittest.TestCase):
                 "fast_p.screenshot.Screenshotter", side_effect=AssertionError("不应截图")
             ):
                 workbook, _ = self.runner().run(excel, root / "out", ["hqchip"], "collect")
-            sheet = openpyxl.load_workbook(workbook, read_only=True).active
-            self.assertEqual("https://example.test/ABC123", sheet.cell(2, 8).value)
+            exported = openpyxl.load_workbook(workbook, read_only=True)
+            try:
+                self.assertEqual(
+                    "https://example.test/ABC123", exported.active.cell(2, 8).value
+                )
+            finally:
+                exported.close()
 
     def test_screenshot_mode_needs_only_a_url_excel(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -102,11 +109,17 @@ class WorkflowModesTest(unittest.TestCase):
             self.capture_excel(excel)
             with patch("fast_p.screenshot.Screenshotter", FakeScreenshotter):
                 workbook, _ = self.runner().run(excel, root / "out", [], "screenshot")
-            sheet = openpyxl.load_workbook(workbook, read_only=True).active
-            headers = [cell.value for cell in sheet[1]]
-            self.assertEqual(1, headers.count("商品链接"))
-            self.assertEqual(1, headers.count("截图文件名"))
-            self.assertEqual("SKU-1.png", sheet.cell(2, headers.index("截图文件名") + 1).value)
+            exported = openpyxl.load_workbook(workbook, read_only=True)
+            try:
+                sheet = exported.active
+                headers = [cell.value for cell in sheet[1]]
+                self.assertEqual(1, headers.count("商品链接"))
+                self.assertEqual(1, headers.count("截图文件名"))
+                self.assertEqual(
+                    "SKU-1.png", sheet.cell(2, headers.index("截图文件名") + 1).value
+                )
+            finally:
+                exported.close()
             self.assertTrue((root / "out" / "screenshots" / "SKU-1.png").is_file())
 
     def test_all_mode_composes_collection_and_screenshot(self):

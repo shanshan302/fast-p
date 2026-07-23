@@ -17,6 +17,7 @@ class JobStateTest(unittest.TestCase):
         sheet.append(["敦煌SKU", "型号", "标准厂牌", "供货价", "最小起订量"])
         sheet.append(["SKU-1", "ABC123", "ACME", 1.0, 100])
         workbook.save(path)
+        workbook.close()
         return path
 
     def test_excel_load_store_resume_and_export(self):

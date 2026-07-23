@@ -172,7 +172,10 @@ def export_results(excel: Path, output: Path, results: list[ItemResult]):
             sheet.cell(result.row_number, columns[header], value)
     stem = excel.stem if excel.stem.endswith("_比价结果") else f"{excel.stem}_比价结果"
     target = output / f"{stem}.xlsx"
-    workbook.save(target)
+    try:
+        workbook.save(target)
+    finally:
+        workbook.close()
     return target
 
 
