@@ -195,6 +195,12 @@ def make_export(output: Path, workbook: Path, results: list[ItemResult]):
         zipped.write(report, report.name)
         screenshot_dir = output / "screenshots"
         if screenshot_dir.exists():
-            for screenshot in screenshot_dir.glob("*.png"):
-                zipped.write(screenshot, f"screenshots/{screenshot.name}")
+            filenames = {
+                result.screenshot for result in results
+                if result.status == "OK" and not result.screenshot_error and result.screenshot
+            }
+            for filename in sorted(filenames):
+                screenshot = screenshot_dir / Path(filename).name
+                if screenshot.is_file():
+                    zipped.write(screenshot, f"screenshots/{screenshot.name}")
     return archive

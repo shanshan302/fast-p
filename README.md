@@ -44,7 +44,7 @@ python main.py
 - Node.js 20+
 - `/Users/wangchongshan/workplace/code/fast-cli` 或兼容的 fast-cli Worker 目录
 - Google Chrome
-- 已登录目标平台的专用 Chrome Profile
+- 已登录目标平台的专用 Chrome Profile；任务会复用正在运行的专用 Chrome，避免截图阶段丢失会话型登录状态
 
 安装 Python 依赖：
 

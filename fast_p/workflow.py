@@ -1,10 +1,5 @@
 from pathlib import Path
 
-try:
-    import psutil
-except ImportError:  # 安装包包含 psutil；源码最小环境仍可运行核心测试。
-    psutil = None
-
 from .collection import CollectorWorker
 from .data import Store, export_results, fingerprint, load_capture_results, load_rows, make_export
 from .models import CaptureRequest, CollectionRequest, Settings
@@ -16,28 +11,6 @@ class Cancelled(Exception):
 
 
 MODES = {"collect", "screenshot", "all"}
-
-
-def cleanup_profile_chrome(profile: str):
-    if psutil is None:
-        return
-    key = str(Path(profile).expanduser()).lower()
-    targets = []
-    for process in psutil.process_iter(["name", "cmdline"]):
-        try:
-            name = (process.info["name"] or "").lower()
-            command = " ".join(process.info["cmdline"] or []).lower()
-            if "chrome" in name and key and key in command:
-                process.terminate()
-                targets.append(process)
-        except (psutil.AccessDenied, psutil.NoSuchProcess):
-            continue
-    _, alive = psutil.wait_procs(targets, timeout=5)
-    for process in alive:
-        try:
-            process.kill()
-        except psutil.NoSuchProcess:
-            pass
 
 
 class JobRunner:
@@ -81,12 +54,12 @@ class JobRunner:
         matched = [result for result in store.all() if result.status == "OK"]
         if not matched:
             return
-        cleanup_profile_chrome(self.settings.chrome_profile)
-        from .screenshot import Screenshotter
+        from .screenshot import Screenshotter, verified_capture_exists
+        screenshot_dir = output / "screenshots"
         with Screenshotter(self.settings.chrome, self.settings.chrome_profile) as screenshotter:
             for index, result in enumerate(matched, start=1):
                 self.check_cancelled()
-                if result.screenshot and (output / "screenshots" / result.screenshot).exists():
+                if verified_capture_exists(screenshot_dir, result.screenshot, result.url):
                     pass
                 else:
                     try:
@@ -95,9 +68,10 @@ class JobRunner:
                             url=result.url,
                             filename=result.sku or result.model,
                         )
-                        result.screenshot = screenshotter.capture(request, output / "screenshots")
+                        result.screenshot = screenshotter.capture(request, screenshot_dir)
                         result.screenshot_error = ""
                     except Exception as exc:
+                        result.screenshot = ""
                         result.screenshot_error = str(exc)
                     store.save(result)
                 self.progress({

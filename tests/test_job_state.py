@@ -1,10 +1,11 @@
 from pathlib import Path
 import tempfile
 import unittest
+import zipfile
 
 import openpyxl
 
-from fast_p.engine import Store, export_results, fingerprint, load_rows
+from fast_p.engine import Store, export_results, fingerprint, load_rows, make_export
 from fast_p.models import ItemResult
 
 
@@ -46,6 +47,22 @@ class JobStateTest(unittest.TestCase):
             self.assertIn("匹配平台", headers)
             self.assertIn("截图文件名", headers)
             workbook.close()
+
+            screenshot_dir = root / "screenshots"
+            screenshot_dir.mkdir()
+            (screenshot_dir / "good.png").write_bytes(b"good")
+            (screenshot_dir / "login-page.png").write_bytes(b"invalid")
+            result.screenshot = "good.png"
+            failed = ItemResult(
+                3, "SKU-2", "XYZ789", "OK", "matched",
+                url="https://example.test/login", screenshot="login-page.png",
+                screenshot_error="页面要求登录",
+            )
+            archive = make_export(root, output, [result, failed])
+            with zipfile.ZipFile(archive) as zipped:
+                names = zipped.namelist()
+            self.assertIn("screenshots/good.png", names)
+            self.assertNotIn("screenshots/login-page.png", names)
 
 
 if __name__ == "__main__":

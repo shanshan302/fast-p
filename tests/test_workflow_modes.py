@@ -100,9 +100,7 @@ class WorkflowModesTest(unittest.TestCase):
             root = Path(tmp)
             excel = root / "collected.xlsx"
             self.capture_excel(excel)
-            with patch("fast_p.workflow.cleanup_profile_chrome"), patch(
-                "fast_p.screenshot.Screenshotter", FakeScreenshotter,
-            ):
+            with patch("fast_p.screenshot.Screenshotter", FakeScreenshotter):
                 workbook, _ = self.runner().run(excel, root / "out", [], "screenshot")
             sheet = openpyxl.load_workbook(workbook, read_only=True).active
             headers = [cell.value for cell in sheet[1]]
@@ -117,8 +115,8 @@ class WorkflowModesTest(unittest.TestCase):
             excel = root / "input.xlsx"
             self.input_excel(excel)
             with patch("fast_p.workflow.CollectorWorker", FakeCollector), patch(
-                "fast_p.workflow.cleanup_profile_chrome",
-            ), patch("fast_p.screenshot.Screenshotter", FakeScreenshotter):
+                "fast_p.screenshot.Screenshotter", FakeScreenshotter,
+            ):
                 workbook, _ = self.runner().run(excel, root / "out", ["hqchip"], "all")
             self.assertTrue(workbook.is_file())
             self.assertEqual(1, len(FakeScreenshotter.calls))
