@@ -58,7 +58,27 @@ Windows 源码调试启动：
 python main.py
 ```
 
-桌面安装版将在后续 Windows 构建步骤中内置 Python、Node、fast-cli、Chromium 和全部依赖，最终用户不需要执行上述命令。
+Windows 安装版内置 Python、Node、fast-cli、Playwright Chromium 和全部运行依赖，最终用户不需要执行上述命令，也不需要填写运行时路径。
+
+## 构建 Windows 安装包
+
+构建机需要安装 Python 3.12 x64、Node.js 20+ 和 Inno Setup 6，并准备一份 fast-cli 源码。fast-cli 不必与 Fast-P 同级，可以通过参数指定：
+
+```powershell
+cd C:\work\fast-p
+powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1 `
+  -FastCliRoot "D:\source\fast-cli"
+```
+
+如果 `fast-p` 和 `fast-cli` 是同级目录，可以省略 `-FastCliRoot`。脚本自动创建隔离构建环境、安装依赖、运行测试、打包 Node/fast-cli/Chromium、执行冒烟检查并调用 Inno Setup。
+
+最终安装包：
+
+```text
+dist\installer\Fast-P-Setup-0.2.0.exe
+```
+
+详细构建、验收和故障排查见 [docs/windows-build.md](docs/windows-build.md)。
 
 ## 三种任务模式
 
@@ -77,6 +97,7 @@ fast_p/screenshot.py  独立 URL 截图能力
 fast_p/data.py        Excel、SQLite、报告和 ZIP
 fast_p/workflow.py    任务编排
 fast_p/runtime_update.py  fast-cli ZIP 安全导入和版本切换
+fast_p/runtime.py         源码/安装版运行时自动定位
 fast_p/app.py         Tkinter 界面
 ```
 

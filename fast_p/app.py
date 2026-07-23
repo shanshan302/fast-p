@@ -3,7 +3,6 @@ from datetime import datetime
 import os
 from pathlib import Path
 import queue
-import shutil
 import subprocess
 import sys
 import threading
@@ -14,6 +13,7 @@ from .collection import CollectionError, list_platforms, open_platform_login, wo
 from .diagnostics import configure_logging, export_diagnostics, record_event
 from .engine import Cancelled, JobRunner
 from .models import PLATFORMS, Settings
+from .runtime import default_runtime_paths
 from .runtime_update import install_runtime_zip, RuntimePackageError
 
 
@@ -27,11 +27,9 @@ MODE_NAMES = {
 
 
 def default_settings():
-    sibling_fast_cli = Path(__file__).resolve().parents[2] / "fast-cli"
+    runtime = default_runtime_paths()
     return {
-        "node": os.environ.get("FAST_NODE_BIN") or shutil.which("node") or "",
-        "fast_cli": os.environ.get("FAST_CLI_ROOT") or (str(sibling_fast_cli) if sibling_fast_cli.is_dir() else ""),
-        "chrome": os.environ.get("CHROME_BIN") or r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        **runtime,
         "chrome_profile": os.environ.get("CHROME_PROFILE") or str(Path.home() / ".fast-scrape-cli" / "chrome-profile"),
         "output": str(Path.home() / "Desktop" / "比价截图"),
         "platforms": [platform for platform, _ in PLATFORMS],

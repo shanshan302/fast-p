@@ -93,7 +93,7 @@ Worker 的约束：
 - Node、策略和厂牌资源只初始化一次；
 - 每次请求使用独立页面，请求结束关闭页面；
 - 输出紧凑结果，不把明细写入 Agent；
-- Worker 退出时关闭自己管理的浏览器；
+- Worker 回收或退出时只断开 CDP，不关闭共享 Chrome，保留会话型登录状态；
 - Worker 异常退出时由 Fast-P 重启，并从 SQLite 重试当前项；
 - 不使用独立看门狗；父进程只处理自己启动的 Worker 生命周期；
 - 根据 Windows 压力测试结果决定是否按固定批次主动回收 Worker/浏览器。
@@ -140,7 +140,7 @@ Fast-P 通过 fast-cli 的 `platforms` 命令读取启用平台，因此运行�
 
 应用日志写入用户目录并自动轮转。诊断包由用户主动导出，只包含脱敏日志、应用/Python/Node/Chrome/fast-cli 版本、任务状态计数和最后进度事件；不复制浏览器 Profile、Cookie、密码或原始 Excel。
 
-Mac 开发环境使用独立 Python 3.12 虚拟环境。Windows 安装包由后续的 Windows CI 构建，不在 Mac 上交叉编译。
+Mac 开发环境使用独立 Python 3.12 虚拟环境。Windows 安装包在 Windows x64 构建机上通过 `scripts/build-windows.ps1` 生成，不在 Mac 上交叉编译。安装包使用 PyInstaller onedir 携带 Python/Tk、Node、fast-cli 和 Playwright Chromium，再由 Inno Setup 压缩为单个安装程序。
 
 ## 验收重点
 

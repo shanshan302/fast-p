@@ -4,13 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fast-p"
-version = "0.1.1"
+version = "0.2.0"
 description = "基于 fast-cli 的电子元器件比价截图桌面工具"
 requires-python = ">=3.10"
 dependencies = [
   "openpyxl>=3.1",
   "pillow>=10",
   "playwright>=1.40",
+]
+
+[project.optional-dependencies]
+build = [
+  "pyinstaller>=6.0,<7",
 ]
 
 [project.scripts]
