@@ -66,8 +66,7 @@ Windows 安装版内置 Python、Node、fast-cli、Playwright Chromium 和全部
 
 ```powershell
 cd C:\work\fast-p
-powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1 `
-  -FastCliRoot "D:\source\fast-cli"
+.\scripts\build-windows.cmd -FastCliRoot "D:\source\fast-cli"
 ```
 
 如果 `fast-p` 和 `fast-cli` 是同级目录，可以省略 `-FastCliRoot`。脚本自动创建隔离构建环境、安装依赖、运行测试、打包 Node/fast-cli/Chromium、执行冒烟检查并调用 Inno Setup。

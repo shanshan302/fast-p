@@ -64,22 +64,19 @@ C:\work\fast-cli
 
 ```powershell
 cd C:\work\fast-p
-powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1
+.\scripts\build-windows.cmd
 ```
 
 fast-cli 位于其他目录时：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1 `
-  -FastCliRoot "D:\source\fast-cli"
+.\scripts\build-windows.cmd -FastCliRoot "D:\source\fast-cli"
 ```
 
 Inno Setup 安装在非标准目录时：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\build-windows.ps1 `
-  -FastCliRoot "D:\source\fast-cli" `
-  -InnoCompiler "D:\tools\Inno Setup 6\ISCC.exe"
+.\scripts\build-windows.cmd -FastCliRoot "D:\source\fast-cli" -InnoCompiler "D:\tools\Inno Setup 6\ISCC.exe"
 ```
 
 脚本会删除并重建项目内的 `.build` 和 `dist`，不会修改 fast-cli 源码目录。
@@ -133,6 +130,17 @@ package-lock.json
 ### 找不到 Inno Setup
 
 使用 `-InnoCompiler` 指定 `ISCC.exe`。Inno Setup 只在构建机需要，目标电脑不需要。
+
+### “表达式或语句中包含意外的标记”
+
+先拉取最新代码，再使用单行 CMD 入口，不要复制带反引号的多行 PowerShell 命令：
+
+```powershell
+git pull
+.\scripts\build-windows.cmd -FastCliRoot "D:\source\fast-cli"
+```
+
+构建脚本本身只使用 ASCII 文本并要求 Windows PowerShell 5.1，以避开旧版 PowerShell 的 UTF-8 脚本编码问题。
 
 ### Chromium 下载失败
 

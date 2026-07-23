@@ -1,3 +1,5 @@
+#requires -Version 5.1
+
 param(
     [string]$FastCliRoot = "",
     [string]$PythonVersion = "3.12",
@@ -15,34 +17,41 @@ if (-not $FastCliRoot) {
 $FastCliRoot = [IO.Path]::GetFullPath($FastCliRoot)
 $FastCliWorker = Join-Path $FastCliRoot "bin\fast-scrape-worker.js"
 if (-not (Test-Path $FastCliWorker -PathType Leaf)) {
-    throw "找不到 fast-cli Worker：$FastCliWorker。请使用 -FastCliRoot 指定 fast-cli 项目目录。"
+    throw "fast-cli worker was not found: $FastCliWorker. Use -FastCliRoot to specify the fast-cli source directory."
 }
 
 $PyLauncher = (Get-Command py.exe -ErrorAction Stop).Source
 $NodeCommand = (Get-Command node.exe -ErrorAction Stop).Source
 $NpmCommand = (Get-Command npm.cmd -ErrorAction Stop).Source
-$NodeVersionText = (& $NodeCommand --version).Trim()
+$NodeVersionText = [string](& $NodeCommand --version)
+$NodeVersionText = $NodeVersionText.Trim()
 if ($LASTEXITCODE -ne 0 -or $NodeVersionText -notmatch '^v(\d+)\.') {
-    throw "无法读取 Node 版本：$NodeVersionText"
+    throw "Unable to read the Node.js version: $NodeVersionText"
 }
 if ([int]$Matches[1] -lt 20) {
-    throw "需要 Node.js 20 或更高版本，当前为 $NodeVersionText"
+    throw "Node.js 20 or newer is required. Current version: $NodeVersionText"
 }
-if ((& $NodeCommand -p "process.arch").Trim() -ne "x64") {
-    throw "需要 Windows x64 Node.js"
+$NodeArchitecture = [string](& $NodeCommand -p "process.arch")
+if ($NodeArchitecture.Trim() -ne "x64") {
+    throw "Windows x64 Node.js is required."
 }
 
 if (-not $InnoCompiler) {
-    $InnoCandidates = @(
-        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
-        (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"),
-        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe")
-    )
+    $ProgramFilesX86 = [Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+    $ProgramFiles64 = [Environment]::GetEnvironmentVariable("ProgramFiles")
+    $LocalAppData = [Environment]::GetEnvironmentVariable("LOCALAPPDATA")
+    $InnoRoots = @($ProgramFilesX86, $ProgramFiles64)
+    if ($LocalAppData) {
+        $InnoRoots += Join-Path $LocalAppData "Programs"
+    }
+    $InnoCandidates = $InnoRoots | Where-Object { $_ } | ForEach-Object {
+        Join-Path $_ "Inno Setup 6\ISCC.exe"
+    }
     $InnoCompiler = $InnoCandidates | Where-Object { $_ -and (Test-Path $_ -PathType Leaf) } |
         Select-Object -First 1
 }
 if (-not $InnoCompiler -or -not (Test-Path $InnoCompiler -PathType Leaf)) {
-    throw "找不到 Inno Setup 6 编译器 ISCC.exe。请先安装 Inno Setup 6，或使用 -InnoCompiler 指定路径。"
+    throw "Inno Setup 6 compiler ISCC.exe was not found. Install Inno Setup 6 or use -InnoCompiler."
 }
 
 $BuildRoot = Join-Path $ProjectRoot ".build"
@@ -64,34 +73,36 @@ foreach ($Path in @($BuildRoot, $DistRoot)) {
 }
 New-Item -ItemType Directory -Path $RuntimeRoot, $NodeStage, $InstallerRoot, $RuntimePackageRoot -Force | Out-Null
 
-Write-Host "[1/7] 创建隔离 Python 构建环境"
+Write-Host "[1/7] Creating an isolated Python build environment"
 & $PyLauncher "-$PythonVersion" -m venv $VenvRoot
 if ($LASTEXITCODE -ne 0) {
-    throw "无法使用 Python $PythonVersion 创建虚拟环境"
+    throw "Unable to create a virtual environment with Python $PythonVersion."
 }
-if ((& $Python -c "import struct; print(struct.calcsize('P') * 8)").Trim() -ne "64") {
-    throw "需要 Windows x64 Python"
+$PythonBits = [string](& $Python -c "import struct; print(struct.calcsize('P') * 8)")
+if ($PythonBits.Trim() -ne "64") {
+    throw "Windows x64 Python is required."
 }
 & $Python -m pip install --upgrade pip
 & $Python -m pip install -e "${ProjectRoot}[build]"
 if ($LASTEXITCODE -ne 0) {
-    throw "Python 构建依赖安装失败"
+    throw "Failed to install Python build dependencies."
 }
 
-$Version = (& $Python -c "import tomllib; print(tomllib.load(open(r'$ProjectRoot\pyproject.toml','rb'))['project']['version'])").Trim()
+$Version = [string](& $Python -c "import tomllib; print(tomllib.load(open(r'$ProjectRoot\pyproject.toml','rb'))['project']['version'])")
+$Version = $Version.Trim()
 if ($Version -notmatch '^(\d+)\.(\d+)\.(\d+)$') {
-    throw "应用版本号必须是 x.y.z：$Version"
+    throw "The application version must use x.y.z format: $Version"
 }
 $VersionParts = @([int]$Matches[1], [int]$Matches[2], [int]$Matches[3], 0)
 
-Write-Host "[2/7] 准备内置 Node $NodeVersionText"
+Write-Host "[2/7] Staging bundled Node.js $NodeVersionText"
 Copy-Item $NodeCommand (Join-Path $NodeStage "node.exe")
 $NodeLicense = Join-Path (Split-Path $NodeCommand -Parent) "LICENSE"
 if (Test-Path $NodeLicense -PathType Leaf) {
     Copy-Item $NodeLicense (Join-Path $NodeStage "LICENSE")
 }
 
-Write-Host "[3/7] 准备 fast-cli 运行时"
+Write-Host "[3/7] Staging the fast-cli runtime"
 New-Item -ItemType Directory -Path $CliStage -Force | Out-Null
 foreach ($Name in @("bin", "src", "config", "strategies", "test")) {
     Copy-Item (Join-Path $FastCliRoot $Name) (Join-Path $CliStage $Name) -Recurse
@@ -105,10 +116,10 @@ try {
     Push-Location $CliStage
     try {
         & $NpmCommand ci --omit=dev --no-audit --no-fund
-        if ($LASTEXITCODE -ne 0) { throw "fast-cli npm ci 失败" }
+        if ($LASTEXITCODE -ne 0) { throw "fast-cli npm ci failed." }
         if (-not $SkipTests) {
             & $NpmCommand test
-            if ($LASTEXITCODE -ne 0) { throw "fast-cli 测试失败" }
+            if ($LASTEXITCODE -ne 0) { throw "fast-cli tests failed." }
         }
     }
     finally {
@@ -122,7 +133,7 @@ Remove-Item (Join-Path $CliStage "test") -Recurse -Force
 $FastCliPackage = Get-Content (Join-Path $CliStage "package.json") -Raw | ConvertFrom-Json
 $FastCliVersion = [string]$FastCliPackage.version
 if ($FastCliVersion -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') {
-    throw "fast-cli 版本号无效：$FastCliVersion"
+    throw "Invalid fast-cli version: $FastCliVersion"
 }
 $UpdateStage = Join-Path $BuildRoot "fast-cli-update"
 New-Item -ItemType Directory -Path $UpdateStage -Force | Out-Null
@@ -144,13 +155,13 @@ $Manifest = [ordered]@{
 $RuntimePackage = Join-Path $RuntimePackageRoot "fast-cli-runtime-win-x64-$FastCliVersion.zip"
 Compress-Archive -Path (Join-Path $UpdateStage "*") -DestinationPath $RuntimePackage -CompressionLevel Optimal
 
-Write-Host "[4/7] 下载并固定 Playwright Chromium"
+Write-Host "[4/7] Downloading the pinned Playwright Chromium"
 $OldBrowsersPath = $env:PLAYWRIGHT_BROWSERS_PATH
 try {
     $env:PLAYWRIGHT_BROWSERS_PATH = $BrowserStage
     & $Python -m playwright install chromium
     if ($LASTEXITCODE -ne 0) {
-        throw "Playwright Chromium 下载失败"
+        throw "Failed to download Playwright Chromium."
     }
 }
 finally {
@@ -158,14 +169,14 @@ finally {
 }
 
 if (-not $SkipTests) {
-    Write-Host "[5/7] 运行 Fast-P 测试"
+    Write-Host "[5/7] Running Fast-P tests"
     & $Python -m unittest discover -s (Join-Path $ProjectRoot "tests") -v
     if ($LASTEXITCODE -ne 0) {
-        throw "Fast-P 测试失败"
+        throw "Fast-P tests failed."
     }
 }
 else {
-    Write-Host "[5/7] 跳过测试"
+    Write-Host "[5/7] Skipping tests"
 }
 
 $VersionFile = Join-Path $BuildRoot "version-info.txt"
@@ -187,11 +198,11 @@ VSVersionInfo(
         '080404B0',
         [
           StringStruct('CompanyName', 'Fast-P'),
-          StringStruct('FileDescription', 'Fast-P 比价截图工具'),
+          StringStruct('FileDescription', 'Fast-P Price Comparison Screenshot Tool'),
           StringStruct('FileVersion', '$Version'),
           StringStruct('InternalName', 'Fast-P'),
           StringStruct('OriginalFilename', 'Fast-P.exe'),
-          StringStruct('ProductName', 'Fast-P 比价截图工具'),
+          StringStruct('ProductName', 'Fast-P Price Comparison Screenshot Tool'),
           StringStruct('ProductVersion', '$Version')
         ]
       )
@@ -202,7 +213,7 @@ VSVersionInfo(
 "@
 [IO.File]::WriteAllText($VersionFile, $VersionText, [Text.UTF8Encoding]::new($false))
 
-Write-Host "[6/7] 构建 Fast-P Windows 应用"
+Write-Host "[6/7] Building the Fast-P Windows application"
 $OldRuntime = $env:FAST_P_BUILD_RUNTIME
 $OldVersionFile = $env:FAST_P_VERSION_FILE
 try {
@@ -212,7 +223,7 @@ try {
     try {
         & $Python -m PyInstaller --noconfirm --clean (Join-Path $ProjectRoot "fast-p.spec")
         if ($LASTEXITCODE -ne 0) {
-            throw "PyInstaller 构建失败"
+            throw "PyInstaller build failed."
         }
     }
     finally {
@@ -234,18 +245,18 @@ $BundledChromium = Get-ChildItem (
 } | Select-Object -First 1
 foreach ($Path in @((Join-Path $AppDist "Fast-P.exe"), $BundledNode, $BundledCli, $BundledWorker)) {
     if (-not (Test-Path $Path -PathType Leaf)) {
-        throw "安装目录缺少运行文件：$Path"
+        throw "A required runtime file is missing from the application bundle: $Path"
     }
 }
 if (-not $BundledChromium) {
-    throw "安装目录缺少 Playwright Chromium"
+    throw "Playwright Chromium is missing from the application bundle."
 }
 & $BundledNode $BundledCli platforms | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "内置 fast-cli platforms 冒烟检查失败" }
+if ($LASTEXITCODE -ne 0) { throw "Bundled fast-cli platforms smoke check failed." }
 & $BundledNode $BundledWorker --help | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "内置 fast-cli Worker 冒烟检查失败" }
+if ($LASTEXITCODE -ne 0) { throw "Bundled fast-cli worker smoke check failed." }
 
-Write-Host "[7/7] 生成 Windows 安装程序"
+Write-Host "[7/7] Building the Windows installer"
 $OldAppVersion = $env:FAST_P_VERSION
 $OldDistDir = $env:FAST_P_DIST_DIR
 $OldInstallerDir = $env:FAST_P_INSTALLER_DIR
@@ -255,7 +266,7 @@ try {
     $env:FAST_P_INSTALLER_DIR = $InstallerRoot
     & $InnoCompiler (Join-Path $ProjectRoot "installer\Fast-P.iss")
     if ($LASTEXITCODE -ne 0) {
-        throw "Inno Setup 构建失败"
+        throw "Inno Setup build failed."
     }
 }
 finally {
@@ -266,8 +277,8 @@ finally {
 
 $Installer = Join-Path $InstallerRoot "Fast-P-Setup-$Version.exe"
 if (-not (Test-Path $Installer -PathType Leaf)) {
-    throw "未找到安装包：$Installer"
+    throw "The installer was not created: $Installer"
 }
 Write-Host ""
-Write-Host "构建完成：$Installer" -ForegroundColor Green
-Write-Host "运行时更新包：$RuntimePackage" -ForegroundColor Green
+Write-Host "Build completed: $Installer" -ForegroundColor Green
+Write-Host "Runtime update package: $RuntimePackage" -ForegroundColor Green
