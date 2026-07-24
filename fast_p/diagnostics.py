@@ -1,3 +1,4 @@
+from contextlib import closing
 import json
 import logging
 from logging.handlers import RotatingFileHandler
@@ -105,7 +106,7 @@ def _task_summary(output):
     if not database or not database.is_file():
         return summary
     try:
-        with sqlite3.connect(database) as connection:
+        with closing(sqlite3.connect(database)) as connection:
             rows = connection.execute("SELECT row_number, result_json FROM items").fetchall()
         for row_number, raw in rows:
             status = json.loads(raw).get("status", "UNKNOWN")
